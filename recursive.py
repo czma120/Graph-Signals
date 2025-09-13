@@ -11,6 +11,7 @@ from collections import deque
 import time
 import numpy as np
 import itertools
+import argparse
 
 
 
@@ -135,7 +136,7 @@ def partition_to_df(input_dir, use_split_name=True, mode= "rec"):
             continue
 
         if use_split_name:
-            graph_id = int(fname.split("_")[1].split(".")[0])
+            graph_id = int(fname.split("_")[-1].split(".")[0]) # get the number after the last underscore
         else:
             graph_id = len(all_records)
 
@@ -144,24 +145,32 @@ def partition_to_df(input_dir, use_split_name=True, mode= "rec"):
         num_nodes = read_num_nodes(hgr_path)
         edge_index = read_edge_index(hgr_path)
   
+        start = time.time_ns()
 
         block_assignments = build_partition_tree(hgr_path)
 
+        partition_time = time.time_ns() - start
+        start = time.time_ns()
   
         if mode == "rec":
             signals = extract_signals(block_assignments)
         elif mode == "haar":
             signals = extract_haar(block_assignments)
-
+            
+        extract_time = time.time_ns() - start
 
         all_records.append({
             'graph_id': graph_id,
             'edge_index': edge_index,
             'num_nodes': num_nodes,
-            'signals': signals  
+            'signals': signals,
+            'partition_time': partition_time,
+            'extract_time': extract_time,
         })
 
     return pd.DataFrame(all_records)
+
+
 # %%
 
 # start_time = time.time()
@@ -202,14 +211,14 @@ def partition_to_df(input_dir, use_split_name=True, mode= "rec"):
 
 
 #rec
-df_cluster_train_rec = partition_to_df("cluster_new_hgr/train", use_split_name = False, mode = "rec")
-df_cluster_test_rec = partition_to_df("cluster_new_hgr/test", use_split_name = False, mode = "rec")
-df_cluster_val_rec = partition_to_df("cluster_new_hgr/val", use_split_name = False, mode = "rec")
+#df_cluster_train_rec = partition_to_df("cluster_new_hgr/train", use_split_name = False, mode = "rec")
+#df_cluster_test_rec = partition_to_df("cluster_new_hgr/test", use_split_name = False, mode = "rec")
+#df_cluster_val_rec = partition_to_df("cluster_new_hgr/val", use_split_name = False, mode = "rec")
 
 
-df_cluster_train_rec.to_csv("cluster_train_rec1.csv")
-df_cluster_test_rec.to_csv("cluster_test_rec1.csv")
-df_cluster_val_rec.to_csv("cluster_val_rec1.csv")
+#df_cluster_train_rec.to_csv("cluster_train_rec1.csv")
+#df_cluster_test_rec.to_csv("cluster_test_rec1.csv")
+#df_cluster_val_rec.to_csv("cluster_val_rec1.csv")
 
 
 # df_cluster_train_rec.to_pickle("cluster_train_rec.pkl")
@@ -274,3 +283,30 @@ df_cluster_val_rec.to_csv("cluster_val_rec1.csv")
 #print(df.head())
 # %%
 #print(df.iloc[[0]])
+
+
+def partition_hgr_dir_to_csv(hgr_dir, output_csv, mode="rec", use_split_name=False):
+    """
+    Processes all .hgr files in a directory, runs recursive or haar partitioning, and writes results to a CSV.
+    mode: "rec" for recursive, "haar" for haar partitioning.
+    """
+    df = partition_to_df(hgr_dir, use_split_name=use_split_name, mode=mode)
+    df.to_csv(output_csv, index=False)
+    print(f"Saved {mode} partitioning results to {output_csv}")
+    
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="Partition .hgr files in a directory and save results to CSV.")
+    parser.add_argument("hgr_dir", type=str, help="Directory containing .hgr files")
+    parser.add_argument("output_csv", type=str, help="Output CSV file path")
+    parser.add_argument("--mode", choices=["rec", "haar"], default="rec", help="Partitioning mode: 'rec' or 'haar'")
+    parser.add_argument("--use_split_name", action="store_true", help="Use split name for graph_id")
+
+    args = parser.parse_args()
+
+    partition_hgr_dir_to_csv(
+        hgr_dir=args.hgr_dir,
+        output_csv=args.output_csv,
+        mode=args.mode,
+        use_split_name=args.use_split_name
+    )
